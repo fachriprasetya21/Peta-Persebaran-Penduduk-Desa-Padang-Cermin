@@ -1,0 +1,125 @@
+---
+title: "Peta Persebaran Penduduk Desa Padang Cermin"
+author: "FACHRI PRASETYA"
+date: "1/16/2023"
+output: html_document
+---
+
+
+```{r}
+#Package yang digunakan dalam pembuatan peta persebaran penduduk
+library(raster)
+library(sf)
+library(rgdal)
+library(dplyr)
+library(rgeos)
+library(maptools)
+library(ggplot2)
+library(ggrepel)
+library(ggthemes)
+```
+
+
+```{r}
+#Data penduduk Desa Padang Cermin Desember 2022
+getwd()
+mydata<-read.csv("data7.csv", header = TRUE, sep = ";" )
+mydata
+
+```
+
+
+```{r}
+
+#check
+getwd()
+st_layers("PadangCermin2.kml")
+
+#ubah ke 2D dari 3D karena data diperoleh dari google earth maka harus diubah menjadi file shp
+st_read("PadangCermin2.kml") -> pdc  
+
+
+pdc_n <- st_zm(pdc[1], drop=T, what='ZM')
+as.data.frame(pdc_n) -> pdc.df
+as(pdc_n, "Spatial") -> polygon.pdc
+st_write(pdc_n, dsn= "padang cermin", driver= "ESRI Shapefile",'pdc.shp')
+```
+
+```{r}
+
+readOGR("padangCermin2.kml") -> pdc2
+SpatialPolygons(pdc2@polygons) -> polygon.pdc2
+writeOGR(pdc2,dsn="padang cermin2",driver="ESRI Shapefile",layer="padang cermin")
+
+
+#plotting
+
+
+readOGR(dsn="padang cermin2/padang cermin.shp",'padang cermin') -> sp
+shapefile("padang cermin2/padang cermin.shp") -> sp.new #raster library
+
+
+
+#konversi ke Spatialpolygonsdataframe
+df <- data.frame(ID=character(), stringsAsFactors=FALSE )
+for (i in sp.new@polygons ){df <- rbind(df, data.frame(ID=i@ID, stringsAsFactors=FALSE))  }
+spatial_df <- SpatialPolygonsDataFrame(sp.new, df)
+```
+
+```{r}
+#Membuat plot map
+sp.fort <- fortify(spatial_df, region = "ID")
+id<- spatial_df@data$ID
+centroids.df <- as.data.frame(coordinates(spatial_df))
+names(centroids.df) <- c("Longitude", "Latitude")
+regencies <- spatial_df@data$ID
+regencies.df <- data.frame(id = id, Name = regencies, centroids.df)
+
+g <- ggplot(regencies.df, aes(map_id = id)) + 
+  geom_map(aes(fill = Name), colour= "grey", map = sp.fort) +
+  expand_limits(x = sp.fort$long, y = sp.fort$lat) + 
+  coord_equal(xlim = c(105.1269, 105.1463), ylim = c(-5.603271, -5.555263)) + #Batas koordinat bisa dipperoleh saat menjalankan syntax nomor 35/38
+  labs(x = "Longitude", y = "Latitude", title = "Desa Padang Cermin") +
+  theme_bw()
+
+#atau kita bisa memplotkan seperti ini
+g +
+  ggtitle("Desa Padang Cermin") + #Beri judul utama pada plot
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.text = element_text(size = 10),
+        axis.title.x = element_text(size = 10, vjust = -0.5),
+        axis.title.y = element_text(size = 10, vjust = 0.2),
+        legend.text = element_text(size = 7))
+
+#Menggunakan ggrepel libraries
+a<- g + geom_point(data = mydata, aes(x = Longitude, y = Latitude, size = Jumlah), color="black", alpha=0.5, show.legend= T) + 
+  ggtitle("Penyebaran Penduduk Desa Padang Cermin") + 
+  theme_map() +
+  theme( legend.position = "bottom",
+         legend.margin = margin(0.2, 0.2, 0.2, 0.2, "cm"),
+         legend.direction = "horizontal",
+         legend.justification = "left",
+         legend.background = element_rect(fill = "lightblue"),
+         legend.key = element_rect(fill = "lightblue", color = NA),
+         legend.key.size = unit(0.3, "cm"),
+         legend.key.width = unit(0.3, "cm"))
+b<- a + labs(size = "Jumlah")
+
+c<- b + geom_label_repel(size=2, aes(label = id,  x = Longitude, y = Latitude),data=regencies.df,
+                             box.padding   = 0.5,
+                             point.padding = 0.2,
+                             segment.color = 'grey50') +
+  ggtitle("Penyebaran Penduduk Desa Padang Cermin") +
+  theme(plot.title = element_text(size = 10, face = "bold"),
+        axis.text = element_text(size = 5),
+        axis.title.x = element_text(size = 10, vjust = -1.2),
+        axis.title.y = element_text(size = 10, vjust = -1.1),
+        legend.position="bottom") 
+c
+  
+```
+
+
+
+``
+
